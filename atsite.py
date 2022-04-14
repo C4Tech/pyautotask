@@ -107,6 +107,7 @@ class atSite:
         
     def _update(self, url, params=None):
         response = self.session.patch(url, data=params, headers=self.headers)
+#        print(response)
         return self._jsondec(response.text)
 
     def _api_update(self, url, params=None):
@@ -117,7 +118,7 @@ class atSite:
     def _api_active(self,url):
         return self._api_read(url + "/query?search={'filter':[{'op':'eq','field':'isActive','value': '1'}]}")
 
-    def create_query(self, url, filter_fields, include_fields):
+    def create_query(self, url, filter_fields, include_fields = None):
         if filter_fields is None:
             filter_fields = "{'op':'eq','field':'isActive','value': '1'}"
         if include_fields is None:
@@ -143,6 +144,17 @@ class atSite:
         """Return a list of all active Products"""
         return self._api_active("Products")
 
+    def get_all_todos(self):
+        """Return a list of all Appointments, past, present and future"""
+        return self._api_read("Appointments" + "/query?search={'filter':[{'op':'exist','field':'startDateTime'}]}")
+    def get_alerts(self):
+        """Return a list of all Alerts for Companies"""
+        return self._api_read("CompanyAlerts" + "/query?search={'filter':[{'op':'exist','field':'id'}]}")
+
+	# Configuration Items
+    def get_ci_by_serial(self, serial):
+        filter_fields = self.create_filter("eq","serialNumber",serial)
+        return self.get_cis(filter_fields)
     def get_cis(self, filter_fields = None, include_fields = None):
         """Return a list of all ConfigurationItems"""
         return self.create_query("ConfigurationItems", filter_fields, include_fields)
@@ -152,16 +164,6 @@ class atSite:
     def get_ci_udf(self,filter_fields = None, include_fields = None):
         """Return a list of all active ConfigureationItems User Defined Fields"""
         return self._api_read("ConfigurationItems/entityInformation/userDefinedFields")
-
-
-    def get_all_todos(self):
-        """Return a list of all Appointments, past, present and future"""
-        return self._api_read("Appointments" + "/query?search={'filter':[{'op':'exist','field':'startDateTime'}]}")
-    def get_alerts(self):
-        """Return a list of all Alerts for Companies"""
-        return self._api_read("CompanyAlerts" + "/query?search={'filter':[{'op':'exist','field':'id'}]}")
-
-
 
     def add_ci(self, ci_cat, cid, ci_type, pid, name, ip, serial, udf):
         # TODO add notes for "returns"
@@ -204,6 +206,72 @@ class atSite:
             params.update(params_id)
             return self._api_update("ConfigurationItems", params)
         
-        
 
+    # Contacts
+    def get_contacts(self, filter_fields = None, include_fields = None):
+        """Return a list of all Contacts"""
+        return self.create_query("Contacts", filter_fields, include_fields)
+
+    def update_contact_udf(self, company_id, contact_id, udf):
+        params = {'id': contact_id}
+        params_udf = {
+            'userDefinedFields': udf
+            }
+        params.update(params_udf)
+        print(params)
+        return self._api_update("Companies/" + str(company_id) + "/Contacts", params)
+
+
+    # Tickets
+    def send_alert_ticket(self, company_id, ci_id):
+        ticket_title = "Network device Down! UniFi Controler reports the device is down."
+        # check if there is already a ticket
+        filter_fields1 = self.create_filter("eq", "configurationItemID", str(ci_id))
+        filter_fields2 = self.create_filter("eq", "title", str(ticket_title))
+        filter_fields = filter_fields1 + "," + filter_fields2
+        ticket = self.create_query("tickets", filter_fields)
+        # TODO Check if other devices are on within the same network. Add that detail to the ticket
+        if not ticket:
+    #        # Create ticket
+            # TODO add Due date. Currently expiring tickets by 2 horus before creation date.
+            params = {
+                'companyID': company_id,
+                'configurationItemID': ci_id,
+                'description': "Automation script has detected the device is not comunicating with the Unifi Controller",
+                'issueType': "14",
+                'priority': "1",
+                'source': "8",
+                'status': "1",
+                'queueID': "8",
+                'title': ticket_title
+            }
+            return self._api_write("Tickets", params)
+        else:
+            return ticket
+
+    def send_generic_alert_ticket(self, ticket_title, description, company_id, ci_id):
+        #ticket_title = "Network device Down! UniFi Controler reports the device is down."
+        # check if there is already a ticket
+        filter_fields1 = self.create_filter("eq", "configurationItemID", str(ci_id))
+        filter_fields2 = self.create_filter("eq", "title", str(ticket_title))
+        filter_fields = filter_fields1 + "," + filter_fields2
+        ticket = self.create_query("tickets", filter_fields)
+        # TODO Check if other devices are on within the same network. Add that detail to the ticket
+        if not ticket:
+    #        # Create ticket
+            # TODO add Due date. Currently expiring tickets by 2 horus before creation date.
+            params = {
+                'companyID': company_id,
+                'configurationItemID': ci_id,
+                'description': description,
+                'issueType': "14",
+                'priority': "1",
+                'source': "8",
+                'status': "1",
+                'queueID': "8",
+                'title': ticket_title
+            }
+            return self._api_write("Tickets", params)
+        else:
+            return ticket
 
