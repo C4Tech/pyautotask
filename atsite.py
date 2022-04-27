@@ -9,7 +9,22 @@ import json
 import logging
 import requests
 
+DEBUGGING = 0
 
+if DEBUGGING:
+    try:
+        import http.client as http_client
+    except ImportError:
+        # Python 2
+        import httplib as http_client
+    http_client.HTTPConnection.debuglevel = 1
+
+    # You must initialize logging, otherwise you'll not see debug output.
+    logging.basicConfig()
+    logging.getLogger().setLevel(logging.DEBUG)
+    requests_log = logging.getLogger("requests.packages.urllib3")
+    requests_log.setLevel(logging.DEBUG)
+    requests_log.propagate = True
 
 """For testing purposes:
 logging.basicConfig(filename='pyunifi.log', level=logging.WARN,
@@ -58,7 +73,7 @@ class atSite:
         self.log = logging.getLogger(__name__ + ".atSite")
 
         self.host = host
-        self.headers = {'ApiIntegrationCode' : interactioncode, 'UserName' : username, 'Secret' : password}
+        self.headers = {"ApiIntegrationCode" : interactioncode, "UserName" : username, "Secret" : password}
         self.username = username
         self.password = password
         self.interactioncode = interactioncode
@@ -106,8 +121,8 @@ class atSite:
         return self._write(self.url + url, params)
         
     def _update(self, url, params=None):
-        response = self.session.patch(url, data=params, headers=self.headers)
-#        print(response)
+#        response = self.session.patch(url, data=params, headers=self.headers)
+        response = self.session.patch(url, json=params, headers=self.headers)
         return self._jsondec(response.text)
 
     def _api_update(self, url, params=None):
@@ -154,6 +169,9 @@ class atSite:
 	# Configuration Items
     def get_ci_by_serial(self, serial):
         filter_fields = self.create_filter("eq","serialNumber",serial)
+        return self.get_cis(filter_fields)
+    def get_ci_by_id(self, ci_id):
+        filter_fields = self.create_filter("eq","id",ci_id)
         return self.get_cis(filter_fields)
     def get_cis(self, filter_fields = None, include_fields = None):
         """Return a list of all ConfigurationItems"""
@@ -206,6 +224,11 @@ class atSite:
             params.update(params_id)
             return self._api_update("ConfigurationItems", params)
         
+    def update_ci_udf(self, ci_id, product_id, udf):
+        params = {"id": ci_id, "isActive": True, "productID": product_id}
+        params_udf = {"userDefinedFields": udf}
+        params.update(params_udf)
+        return self._api_update("ConfigurationItems", params)
 
     # Contacts
     def get_contacts(self, filter_fields = None, include_fields = None):
@@ -213,14 +236,21 @@ class atSite:
         return self.create_query("Contacts", filter_fields, include_fields)
 
     def update_contact_udf(self, company_id, contact_id, udf):
-        params = {'id': contact_id}
-        params_udf = {
-            'userDefinedFields': udf
-            }
+        params = {"id": contact_id}
+        params_udf = {"userDefinedFields": udf}
         params.update(params_udf)
-        print(params)
+
         return self._api_update("Companies/" + str(company_id) + "/Contacts", params)
 
+
+	# Holidays
+    def get_holiday_sets(self):
+        filter_field = "/query?search={'filter':[{'op':'gt','field':'id','value': '0'}]}"
+        return self._api_read("HolidaySets" + filter_field)
+        
+    def get_holidays(self):
+        filter_field = "/query?search={'filter':[{'op':'gt','field':'id','value': '0'}]}"
+        return self._api_read("Holidays" + filter_field)
 
     # Tickets
     def send_alert_ticket(self, company_id, ci_id):
@@ -275,3 +305,42 @@ class atSite:
         else:
             return ticket
 
+    def get_new_unassigned_tickets(self):
+        filter_fields = self.create_filter("eq", "status", "1")
+        tickets = self.create_query("Tickets", filter_fields)
+        return tickets
+
+    def get_ticket_by_id(self, t_id):
+        filter_fields = self.create_filter("eq","id", str(t_id))
+        return self.create_query("Tickets", filter_fields)
+
+    def get_ticket_by_number(self, t_no):
+        filter_fields = self.create_filter("eq","ticketNumber", str(t_no))
+        return self.create_query("Tickets", filter_fields)
+
+    # Resources
+    def get_resource_id_by_email(self, email):
+        filter_fields = self.create_filter("eq", "email", email)
+        resource = self.create_query("Resources", filter_fields)
+        if not resource:
+            filter_fields = self.create_filter("eq", "email2", email)
+            resource = self.create_query("Resources", filter_fields)
+        return resource[0]
+
+    # Time Entries
+    def get_time_entries_by_resource_id(self, r_id, date):
+        filter_fields1 = self.create_filter("eq", "resourceID", str(r_id))
+        filter_fields2 = self.create_filter("gt", "dateWorked", date)
+        filter_fields = filter_fields1 + "," + filter_fields2
+        return self.create_query("TimeEntries", filter_fields)
+		
+	# Roles
+    def get_role_ids(self):
+        return self._api_active("Roles")
+        
+    # Contracts
+    def get_contracts_from_company_id(self,c_id):
+        filter_fields = self.create_filter("eq", "companyID", str(c_id))
+        return self.create_query("Contracts", filter_fields)
+		
+		
