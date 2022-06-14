@@ -151,10 +151,8 @@ class atSite:
 
 
     # end user fuctions
-    def get_companies(self,filter_fields = None, include_fields = None):
-        """Return a list of all active Companies"""
-        return self.create_query("Companies", filter_fields, include_fields)
-        
+    def get_product_by_sku(self,sku):
+        return self._api_read("Products/query?search={'filter':[{'op':'eq','field':'sku', 'value': '" + sku + "'}]}")
     def get_products(self):
         """Return a list of all active Products"""
         return self._api_active("Products")
@@ -165,6 +163,18 @@ class atSite:
     def get_alerts(self):
         """Return a list of all Alerts for Companies"""
         return self._api_read("CompanyAlerts" + "/query?search={'filter':[{'op':'exist','field':'id'}]}")
+
+    #Companies
+    def get_companies(self,filter_fields = None, include_fields = None):
+        """Return a list of all active Companies"""
+        return self.create_query("Companies", filter_fields, include_fields)
+    def update_company_udf(self, cid: str, udf):
+        params = {"id": cid, "isActive": True}
+        params_udf = {"userDefinedFields": udf}
+        params.update(params_udf)
+        return self._api_update("Companies", params)    
+
+
 
 	# Configuration Items
     def get_ci_by_serial(self, serial):
@@ -205,7 +215,7 @@ class atSite:
             'referenceTitle': name,
             'serialNumber': serial,
 # TODO when attempting to push User Definded Fields AT comes back with 'Object reference not set to an instance of an object. Need to figure out why this is happening and fix it.
-#            'userDefinedFields': udf
+            'userDefinedFields': udf
             }
 
         #check if device already is in AT. Create a new CI if new. Update if it already in AT
@@ -230,6 +240,12 @@ class atSite:
         params.update(params_udf)
         return self._api_update("ConfigurationItems", params)
 
+    def update_ci_just_udf(self, c_id, ci_id, udf):
+        params = {"id": ci_id, "companyID": c_id}
+        params_udf = {"userDefinedFields": udf}
+        params.update(params_udf)
+        return self._api_update("ConfigurationItems", params)
+
     # Contacts
     def get_contacts(self, filter_fields = None, include_fields = None):
         """Return a list of all Contacts"""
@@ -239,7 +255,6 @@ class atSite:
         params = {"id": contact_id}
         params_udf = {"userDefinedFields": udf}
         params.update(params_udf)
-
         return self._api_update("Companies/" + str(company_id) + "/Contacts", params)
 
 
@@ -342,5 +357,27 @@ class atSite:
     def get_contracts_from_company_id(self,c_id):
         filter_fields = self.create_filter("eq", "companyID", str(c_id))
         return self.create_query("Contracts", filter_fields)
+    # Contract Rates
+    def get_all_contracts(self):
+        filter_fields = "{'op': 'exist', 'field': 'id'}"
+        return self.create_query("Contracts", filter_fields)
+
 		
-		
+    # Contract Rates
+    def get_all_contract_rates(self):
+        filter_fields = "{'op': 'exist', 'field': 'id'}"
+        return self.create_query("ContractRates", filter_fields)
+
+	# Dispatch Calendar
+    def get_appointments(self, start_date, end_date):
+        filter_fields = self.create_filter("gte", "startDateTime", start_date) + "," + self.create_filter("lt", "startDateTime", end_date)
+        return self.create_query("Appointments", filter_fields)
+        
+    def get_servicecalls(self, start_date, end_date):
+        filter_fields = self.create_filter("gte", "startDateTime", start_date) + "," + self.create_filter("lt", "startDateTime", end_date)
+        return self.create_query("ServiceCalls", filter_fields)
+
+    def get_servicecalls_incomplete(self, year_ago):
+        filter_fields = self.create_filter("eq", "isComplete", "0") + "," + self.create_filter("gt", "startDateTime", year_ago)
+        return self.create_query("ServiceCalls", filter_fields)
+
